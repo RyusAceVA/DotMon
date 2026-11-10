@@ -1,0 +1,294 @@
+// 01 — System overview: CPU, memory, GPU, network, disks.
+//
+// Responsive: three columns on wide windows, two on medium (e.g. a
+// Hyprland half-screen tile), one scrolling column on narrow tiles.
+
+import { ScrollView } from "std-widgets.slint";
+import { Theme, Sys, Api } from "../theme.slint";
+import { Card, Caption, BigValue, DotMeter, DotColumns, LineChart, Stat } from "../components/widgets.slint";
+
+component History inherits Rectangle {
+    in property <string> line;
+    in property <string> area;
+    in property <[float]> cols;
+    in property <color> tint: Theme.fg;
+    if Api.chart-style == 0: LineChart {
+        line: root.line;
+        area: root.area;
+        tint: root.tint;
+    }
+    if Api.chart-style == 1: DotColumns {
+        values: root.cols;
+        rows: 10;
+        on: root.tint;
+    }
+}
+
+component Legend inherits HorizontalLayout {
+    in property <color> tint;
+    in property <string> label;
+    in property <string> value;
+    spacing: 8px;
+    Rectangle {
+        width: 8px;
+        height: 8px;
+        y: (parent.height - self.height) / 2;
+        border-radius: 4px;
+        background: root.tint;
+    }
+    Caption { text: root.label; }
+    Text {
+        text: root.value;
+        color: Theme.fg;
+        font-family: Theme.mono-font;
+        font-size: 13px;
+        vertical-alignment: center;
+    }
+}
+
+component RateValue inherits VerticalLayout {
+    in property <string> label;
+    in property <string> value;
+    in property <color> label-color: Theme.fg-dim;
+    in property <length> size: 28px;
+    spacing: 2px;
+    Caption { text: root.label; color: root.label-color; }
+    Text {
+        text: root.value;
+        font-family: Theme.dot-font;
+        font-weight: 800;
+        font-size: root.size;
+        color: Theme.fg;
+        overflow: elide;
+    }
+}
+
+component CpuCard inherits Card {
+    in property <bool> compact;
+    index: "01";
+    title: "PROCESSEUR";
+    trailing: Sys.cpu-model;
+    HorizontalLayout {
+        spacing: 28px;
+        VerticalLayout {
+            width: root.compact ? 214px : 230px;
+            spacing: 10px;
+            BigValue {
+                value: Sys.cpu;
+                unit: "%";
+                size: root.compact ? 76px : 96px;
+            }
+            DotMeter {
+                value: Sys.cpu-frac;
+                count: 24;
+            }
+            Rectangle { height: 6px; }
+            Stat { label: "FRÉQUENCE"; value: Sys.cpu-freq; }
+            Stat { label: "TEMPÉRATURE"; value: Sys.cpu-temp; }
+            Stat { label: "CHARGE"; value: Sys.cpu-load; }
+            Rectangle { vertical-stretch: 1; }
+        }
+        VerticalLayout {
+            spacing: 14px;
+            History {
+                vertical-stretch: 1;
+                min-height: 80px;
+                line: Sys.cpu-line;
+                area: Sys.cpu-area;
+                cols: Sys.cpu-cols;
+            }
+            VerticalLayout {
+                spacing: 8px;
+                Caption { text: "CŒURS · " + Sys.cores.length; }
+                DotColumns {
+                    height: 76px;
+                    values: Sys.cores;
+                    rows: 8;
+                    centered: false;
+                }
+            }
+        }
+    }
+}
+
+component MemCard inherits Card {
+    index: "02";
+    title: "MÉMOIRE";
+    trailing: "/ " + Sys.mem-total;
+    BigValue {
+        value: Sys.mem;
+        unit: Sys.mem-unit;
+        size: 72px;
+    }
+    DotMeter {
+        value: Sys.mem-frac;
+        count: 24;
+    }
+    History {
+        vertical-stretch: 1;
+        min-height: 60px;
+        line: Sys.mem-line;
+        area: Sys.mem-area;
+        cols: Sys.mem-cols;
+    }
+    Stat { label: "DISPONIBLE"; value: Sys.mem-avail; }
+    Stat { label: "CACHE"; value: Sys.mem-cached; }
+    Stat { label: "SWAP"; value: Sys.swap; }
+}
+
+component GpuCard inherits Card {
+    index: "03";
+    title: "GRAPHIQUE";
+    trailing: Sys.gpu-temp;
+    if !Sys.gpu-present: Caption {
+        text: "AUCUN GPU DÉTECTÉ";
+        vertical-stretch: 1;
+        horizontal-alignment: center;
+    }
+    if Sys.gpu-present: VerticalLayout {
+        spacing: 12px;
+        BigValue {
+            value: Sys.gpu;
+            unit: Sys.gpu-unit;
+            size: 64px;
+        }
+        History {
+            vertical-stretch: 1;
+            min-height: 50px;
+            line: Sys.gpu-line;
+            area: Sys.gpu-area;
+            cols: Sys.gpu-cols;
+        }
+        HorizontalLayout {
+            spacing: 10px;
+            height: 26px;
+            Caption { text: "VRAM"; width: 44px; }
+            DotMeter {
+                value: Sys.vram-frac;
+                count: 16;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+        Stat { label: "MÉMOIRE"; value: Sys.vram; }
+        Stat { label: "PUISSANCE"; value: Sys.gpu-power; }
+        Caption {
+            text: Sys.gpu-name;
+            color: Theme.fg-faint;
+            overflow: elide;
+        }
+    }
+}
+
+component NetCard inherits Card {
+    index: "04";
+    title: "RÉSEAU";
+    trailing: Sys.net-iface;
+    HorizontalLayout {
+        spacing: 18px;
+        RateValue { label: "↓ RÉCEPTION"; value: Sys.net-rx; }
+        RateValue { label: "↑ ENVOI"; value: Sys.net-tx; label-color: Theme.accent; }
+    }
+    LineChart {
+        vertical-stretch: 1;
+        min-height: 60px;
+        line: Sys.net-rx-line;
+        line2: Sys.net-tx-line;
+        fill: false;
+    }
+    HorizontalLayout {
+        spacing: 18px;
+        Legend { tint: Theme.fg; label: "REÇU"; value: Sys.net-rx-total; }
+        Legend { tint: Theme.accent; label: "ENVOYÉ"; value: Sys.net-tx-total; }
+        Rectangle { horizontal-stretch: 1; }
+        Caption { text: "ÉCHELLE " + Sys.net-max; color: Theme.fg-faint; }
+    }
+}
+
+component DiskCard inherits Card {
+    index: "05";
+    title: "STOCKAGE";
+    trailing: "ÉCHELLE " + Sys.disk-max;
+    HorizontalLayout {
+        spacing: 18px;
+        RateValue { label: "LECTURE"; value: Sys.disk-read; }
+        RateValue { label: "ÉCRITURE"; value: Sys.disk-write; label-color: Theme.accent; }
+    }
+    LineChart {
+        vertical-stretch: 1;
+        min-height: 50px;
+        line: Sys.disk-read-line;
+        line2: Sys.disk-write-line;
+        fill: false;
+    }
+    for d in Sys.disks: VerticalLayout {
+        spacing: 6px;
+        HorizontalLayout {
+            spacing: 10px;
+            Text {
+                text: d.mount;
+                color: Theme.fg;
+                font-family: Theme.mono-font;
+                font-size: 13px;
+                horizontal-stretch: 0;
+            }
+            Caption {
+                text: d.detail;
+                color: Theme.fg-faint;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+            Caption { text: d.used; horizontal-stretch: 0; }
+        }
+        DotMeter {
+            value: d.frac;
+            count: 28;
+            height: 6px;
+        }
+    }
+}
+
+export component Dashboard inherits Rectangle {
+    // 0 wide (3 columns), 1 medium (2 columns), 2 narrow (1 column).
+    // The fixed grid needs room in both directions; otherwise fall back to
+    // the scrolling layouts.
+    property <int> layout: 0;
+    function relayout() {
+        self.layout = (self.width >= 1180px && self.height >= 720px) ? 0
+            : self.width >= 760px ? 1 : 2;
+    }
+    changed width => { self.relayout(); }
+    changed height => { self.relayout(); }
+
+    if root.layout == 0: GridLayout {
+        spacing: Theme.gap;
+        CpuCard { row: 0; col: 0; colspan: 2; }
+        MemCard { row: 0; col: 2; }
+        GpuCard { row: 1; col: 0; }
+        NetCard { row: 1; col: 1; }
+        DiskCard { row: 1; col: 2; }
+    }
+
+    if root.layout == 1: ScrollView {
+        GridLayout {
+            spacing: Theme.gap;
+            padding-right: 12px;
+            CpuCard { row: 0; col: 0; colspan: 2; compact: true; height: 380px; }
+            MemCard { row: 1; col: 0; height: 400px; }
+            GpuCard { row: 1; col: 1; height: 400px; }
+            NetCard { row: 2; col: 0; height: 330px; }
+            DiskCard { row: 2; col: 1; height: 330px; }
+        }
+    }
+
+    if root.layout == 2: ScrollView {
+        VerticalLayout {
+            spacing: Theme.gap;
+            padding-right: 12px;
+            CpuCard { compact: true; height: 360px; }
+            MemCard { height: 400px; }
+            GpuCard { height: 400px; }
+            NetCard { height: 320px; }
+            DiskCard { height: 340px; }
+        }
+    }
+}

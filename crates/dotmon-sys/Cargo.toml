@@ -1,0 +1,15 @@
+[package]
+name = "dotmon-sys"
+description = "System backends for Dotmon (mock today, Linux next)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+dotmon-core = { workspace = true }
+sysinfo = { version = "0.40.1", default-features = false, features = ["system", "component", "disk", "user"] }
+nvml-wrapper = "0.13.0"
+rustix = { version = "1.1.6", features = ["param", "process", "event"] }

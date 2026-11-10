@@ -1,0 +1,73 @@
+# Maintainer: RyusAceVA <120704766+RyusAceVA@users.noreply.github.com>
+pkgname=dotmon
+# Version Cargo 0.4.0-beta.1 ↔ pkgver 0.4.0_beta.1 (pacman interdit le tiret ;
+# une pré-version se classe avant la version finale).
+pkgver=0.4.0_beta.1
+_ver=${pkgver//_/-}
+pkgrel=1
+pkgdesc='Moniteur système et gestionnaire de tâches natif Linux/Wayland (Rust + Slint)'
+arch=('x86_64')
+url='https://github.com/RyusAceVA/dotmon'
+# Slint est utilisé sous GPL-3.0 : Dotmon est GPL-3.0-only. Polices embarquées : OFL-1.1.
+license=('GPL-3.0-only' 'OFL-1.1')
+# Dépendances vérifiées sur le binaire installé (readelf, LD_DEBUG=libs, Arch propre) :
+#  - liées : glibc, gcc-libs (libgcc_s), fontconfig ;
+#  - chargées à l'exécution (dlopen) : wayland (libwayland-client), libxkbcommon ;
+#  - hicolor-icon-theme : hiérarchie du thème d'icônes (namcap) ;
+#  - ttf-font : au moins une police système, sinon la bibliothèque de texte (fontique)
+#    plante au démarrage (« NoMatch » sur un système sans aucune police).
+# Le rendu par défaut est logiciel : libEGL n'est chargée que pour l'option OpenGL.
+depends=('glibc' 'gcc-libs' 'fontconfig' 'wayland' 'libxkbcommon' 'hicolor-icon-theme' 'ttf-font')
+makedepends=('cargo')
+# NVML est chargé à la demande, seulement si le GPU NVIDIA est déjà éveillé.
+optdepends=('nvidia-utils: mesures du GPU NVIDIA (NVML)'
+            'libglvnd: rendu OpenGL optionnel (SLINT_BACKEND=winit-femtovg)')
+conflicts=('dotmon-bin')
+options=('!lto' '!debug')
+install=dotmon.install
+# Archive produite par la CI (git archive de l'étiquette) et jointe à la release GitHub.
+source=("$url/releases/download/v$_ver/$pkgname-$_ver.tar.gz")
+sha256sums=('@SHA256_SOURCE@')
+
+prepare() {
+    cd "$pkgname-$_ver"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd "$pkgname-$_ver"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    # Aucun chemin de la machine de construction dans le binaire.
+    export RUSTFLAGS="$RUSTFLAGS --remap-path-prefix=$HOME=/home/build \
+--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo \
+--remap-path-prefix=$srcdir/$pkgname-$_ver=/build/$pkgname"
+    cargo build --frozen --release -p dotmon
+}
+
+check() {
+    cd "$pkgname-$_ver"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    cargo test --frozen --release --workspace
+}
+
+package() {
+    cd "$pkgname-$_ver"
+    install -Dm755 target/release/dotmon -t "$pkgdir/usr/bin/"
+    install -Dm644 packaging/dotmon.desktop -t "$pkgdir/usr/share/applications/"
+    install -Dm644 packaging/icons/dotmon.svg \
+        "$pkgdir/usr/share/icons/hicolor/scalable/apps/dotmon.svg"
+    local size
+    for size in 16 24 32 48 64 128 256 512; do
+        install -Dm644 "packaging/icons/png/dotmon-$size.png" \
+            "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/dotmon.png"
+    done
+    install -Dm644 crates/dotmon-app/ui/fonts/OFL-Doto.txt \
+        "$pkgdir/usr/share/licenses/$pkgname/OFL-Doto.txt"
+    install -Dm644 crates/dotmon-app/ui/fonts/OFL-SpaceMono.txt \
+        "$pkgdir/usr/share/licenses/$pkgname/OFL-SpaceMono.txt"
+    install -Dm644 README.md -t "$pkgdir/usr/share/doc/$pkgname/"
+    install -Dm644 docs/*.md -t "$pkgdir/usr/share/doc/$pkgname/"
+}

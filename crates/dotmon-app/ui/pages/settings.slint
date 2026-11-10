@@ -1,0 +1,175 @@
+// 03 — Appearance and refresh settings.
+
+import { ScrollView } from "std-widgets.slint";
+import { Theme, Api, Sys } from "../theme.slint";
+import { Card, Caption, Segmented, Toggle } from "../components/widgets.slint";
+
+component SettingRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> hint;
+    min-height: 64px;
+    spacing: 20px;
+    VerticalLayout {
+        alignment: center;
+        spacing: 4px;
+        horizontal-stretch: 1;
+        Text {
+            text: root.label;
+            color: Theme.fg;
+            font-family: Theme.mono-font;
+            font-size: 14px;
+        }
+        Text {
+            text: root.hint;
+            color: Theme.fg-faint;
+            font-family: Theme.mono-font;
+            font-size: 11px;
+            wrap: word-wrap;
+        }
+    }
+    VerticalLayout {
+        alignment: center;
+        horizontal-stretch: 0;
+        @children
+    }
+}
+
+component Divider inherits Rectangle {
+    height: 1px;
+    background: Theme.border;
+}
+
+component Swatch inherits Rectangle {
+    in property <color> tint;
+    in property <bool> selected;
+    callback clicked();
+    width: 34px;
+    height: 34px;
+    border-radius: 17px;
+    border-width: selected ? 2px : 1px;
+    border-color: selected ? Theme.fg : Theme.border-strong;
+    background: transparent;
+    animate border-color { duration: Theme.fast; }
+    Rectangle {
+        width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        background: root.tint;
+    }
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component SettingsPage inherits Rectangle {
+    ScrollView {
+        VerticalLayout {
+            spacing: Theme.gap;
+            alignment: start;
+            padding-right: 14px;
+
+            Card {
+                index: "A";
+                title: "RAFRAÎCHISSEMENT";
+                SettingRow {
+                    label: "Fréquence d'échantillonnage";
+                    hint: "Intervalle entre deux mesures. Plus court = plus réactif, plus coûteux.";
+                    Segmented {
+                        options: ["0.5 s", "1 s", "2 s", "5 s"];
+                        selected: Api.refresh-index;
+                        activated(i) => { Api.set-refresh(i); }
+                    }
+                }
+                Divider { }
+                SettingRow {
+                    label: "Profondeur d'historique";
+                    hint: "Nombre d'échantillons conservés pour les graphiques.";
+                    Segmented {
+                        options: ["60", "120", "300"];
+                        selected: Api.history-index;
+                        activated(i) => { Api.set-history(i); }
+                    }
+                }
+            }
+
+            Card {
+                index: "B";
+                title: "APPARENCE";
+                SettingRow {
+                    label: "Couleur d'accent";
+                    hint: "Utilisée pour les pics, la sélection et les alertes.";
+                    HorizontalLayout {
+                        spacing: 10px;
+                        Swatch { tint: #e8352b; selected: Theme.accent-index == 0; clicked => { Api.set-accent(0); } }
+                        Swatch { tint: #f0a030; selected: Theme.accent-index == 1; clicked => { Api.set-accent(1); } }
+                        Swatch { tint: #4fd17f; selected: Theme.accent-index == 2; clicked => { Api.set-accent(2); } }
+                        Swatch { tint: #ece9e2; selected: Theme.accent-index == 3; clicked => { Api.set-accent(3); } }
+                    }
+                }
+                Divider { }
+                SettingRow {
+                    label: "Style des graphiques";
+                    hint: "Courbe continue ou colonnes de points.";
+                    Segmented {
+                        options: ["COURBE", "POINTS"];
+                        selected: Api.chart-style;
+                        activated(i) => { Api.set-chart-style(i); }
+                    }
+                }
+                Divider { }
+                SettingRow {
+                    label: "Animations";
+                    hint: "Transitions et pulsations. Désactiver réduit le travail de rendu.";
+                    Toggle {
+                        checked: Theme.animations;
+                        toggled(v) => { Api.set-animations(v); }
+                    }
+                }
+                Divider { }
+                SettingRow {
+                    label: "Trame de points";
+                    hint: "Motif décoratif en arrière-plan.";
+                    Toggle {
+                        checked: Theme.dot-grid;
+                        toggled(v) => { Api.set-dot-grid(v); }
+                    }
+                }
+            }
+
+            Card {
+                index: "C";
+                title: "PROCESSUS";
+                SettingRow {
+                    label: "Afficher les threads du noyau";
+                    hint: "kworker, ksoftirqd… Toujours protégés.";
+                    Toggle {
+                        checked: Api.show-kernel;
+                        toggled(v) => { Api.set-show-kernel(v); }
+                    }
+                }
+            }
+
+            Card {
+                index: "i";
+                title: "À PROPOS";
+                Text {
+                    text: "Dotmon ne termine jamais un processus sans votre confirmation explicite. Les composants de la session (Hyprland, Quickshell, PipeWire…), le noyau, les processus d'autres utilisateurs et Dotmon lui-même sont protégés. Aucun privilège root n'est demandé.";
+                    color: Theme.fg-dim;
+                    font-family: Theme.mono-font;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+                Caption {
+                    text: "CONFIG  " + Api.config-path;
+                    color: Theme.fg-faint;
+                    overflow: elide;
+                }
+                Caption {
+                    text: "SOURCE  " + Sys.backend;
+                    color: Theme.fg-faint;
+                }
+            }
+        }
+    }
+}

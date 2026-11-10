@@ -1,0 +1,376 @@
+// Reusable visual building blocks: dot-matrix numbers, dot meters, charts,
+// cards, segmented controls, buttons.
+
+import { Theme, Sys } from "../theme.slint";
+
+// Small, spaced, upper-case label.
+export component Caption inherits Text {
+    color: Theme.fg-dim;
+    font-family: Theme.mono-font;
+    font-size: 11px;
+    letter-spacing: 1.6px;
+    vertical-alignment: center;
+}
+
+// Large dot-matrix figure.
+export component DotNumber inherits Text {
+    font-family: Theme.dot-font;
+    font-weight: 800;
+    color: Theme.fg;
+    font-size: 72px;
+    vertical-alignment: bottom;
+}
+
+// Value + small unit, aligned on the baseline of the dot figure.
+export component BigValue inherits HorizontalLayout {
+    in property <string> value;
+    in property <string> unit;
+    in property <length> size: 72px;
+    in property <color> color: Theme.fg;
+    spacing: 6px;
+    alignment: start;
+    DotNumber {
+        text: root.value;
+        font-size: root.size;
+        color: root.color;
+    }
+    VerticalLayout {
+        alignment: end;
+        padding-bottom: root.size * 0.14;
+        Text {
+            text: root.unit;
+            color: Theme.fg-dim;
+            font-family: Theme.mono-font;
+            font-size: max(12px, root.size * 0.2);
+        }
+    }
+}
+
+// Status dot that blinks once per sample. Deliberately not animated: a
+// fade on every tick would keep the renderer busy most of the time.
+export component LiveDot inherits Rectangle {
+    in property <color> tint: Theme.accent;
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    background: tint;
+    opacity: Math.mod(Sys.tick, 2) == 0 ? 1.0 : 0.3;
+}
+
+// Horizontal row of dots, lit proportionally to `value` (0–1).
+export component DotMeter inherits Rectangle {
+    in property <float> value;
+    in property <int> count: 32;
+    in property <color> on: Theme.fg;
+    in property <color> off: Theme.dot-off;
+    in property <color> peak: Theme.accent;
+    // Last lit dot is drawn in the accent colour above this fraction.
+    in property <float> peak-threshold: 0.85;
+    property <length> gap: 4px;
+    property <length> dot: max(2px, min(self.height, (self.width - (count - 1) * gap) / count));
+    property <int> lit: Math.round(Math.clamp(value, 0, 1) * count);
+    height: 8px;
+    for i in count: Rectangle {
+        x: i * (root.dot + root.gap);
+        y: (root.height - root.dot) / 2;
+        width: root.dot;
+        height: root.dot;
+        border-radius: self.width / 2;
+        background: i >= root.lit ? root.off
+            : (i == root.lit - 1 && root.value >= root.peak-threshold) ? root.peak
+            : root.on;
+        animate background { duration: Theme.fast; }
+    }
+}
+
+// Columns of dots (dot-matrix bar chart). `values` are 0–1.
+export component DotColumns inherits Rectangle {
+    in property <[float]> values;
+    in property <int> rows: 8;
+    in property <color> on: Theme.fg;
+    in property <color> off: Theme.dot-off;
+    in property <color> peak: Theme.accent;
+    in property <length> gap: 3px;
+    in property <bool> centered: true;
+    property <int> n: max(1, values.length);
+    property <length> dot: max(2px, min(
+        (self.height - (rows - 1) * gap) / rows,
+        (self.width - (n - 1) * gap) / n));
+    property <length> x0: centered ? (self.width - n * dot - (n - 1) * gap) / 2 : 0px;
+    for v[i] in values: Rectangle {
+        property <int> level: Math.ceil(Math.clamp(v, 0, 1) * root.rows - 0.001);
+        x: root.x0 + i * (root.dot + root.gap);
+        width: root.dot;
+        height: root.height;
+        for j in root.rows: Rectangle {
+            // j = 0 is the top row.
+            property <bool> lit: (root.rows - j) <= level;
+            y: root.height - (root.rows - j) * (root.dot + root.gap) + root.gap;
+            width: root.dot;
+            height: root.dot;
+            border-radius: self.width / 2;
+            // The top quarter of the scale lights up in the accent colour.
+            background: !lit ? root.off : (root.rows - j) > root.rows * 0.75 ? root.peak : root.on;
+            animate background { duration: Theme.fast; }
+        }
+    }
+}
+
+// Line chart drawn from SVG path commands produced by `dotmon_core::chart`.
+export component LineChart inherits Rectangle {
+    in property <string> line: "M 0 100 L 0 100";
+    in property <string> area: "M 0 100 L 0 100 Z";
+    in property <string> line2: "";
+    in property <float> view-w: Sys.view-w;
+    in property <color> tint: Theme.fg;
+    in property <color> tint2: Theme.accent;
+    in property <bool> fill: true;
+    in property <bool> grid: true;
+    clip: true;
+
+    if grid: Rectangle {
+        for k in 3: Rectangle {
+            y: parent.height * (k + 1) / 4;
+            height: 1px;
+            width: parent.width;
+            background: Theme.border;
+        }
+    }
+    if fill: Path {
+        width: 100%;
+        height: 100%;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: root.view-w;
+        viewbox-height: 100;
+        // Stretch the geometry to the element; the stroke stays uniform.
+        fit: ImageFit.fill;
+        commands: root.area;
+        fill: root.tint.with-alpha(0.07);
+        stroke-width: 0px;
+    }
+    if root.line2 != "": Path {
+        width: 100%;
+        height: 100%;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: root.view-w;
+        viewbox-height: 100;
+        // Stretch the geometry to the element; the stroke stays uniform.
+        fit: ImageFit.fill;
+        commands: root.line2;
+        stroke: root.tint2;
+        stroke-width: 1.5px;
+        fill: transparent;
+    }
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: root.view-w;
+        viewbox-height: 100;
+        // Stretch the geometry to the element; the stroke stays uniform.
+        fit: ImageFit.fill;
+        commands: root.line;
+        stroke: root.tint;
+        stroke-width: 1.5px;
+        fill: transparent;
+    }
+}
+
+// Rounded panel with an indexed header ("01  PROCESSEUR").
+export component Card inherits Rectangle {
+    in property <string> index;
+    in property <string> title;
+    in property <string> trailing;
+    in property <bool> header: true;
+    background: Theme.surface;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    VerticalLayout {
+        padding: Theme.pad;
+        spacing: 12px;
+        if root.header: HorizontalLayout {
+            spacing: 10px;
+            height: 16px;
+            Caption {
+                text: root.index;
+                color: Theme.accent;
+                horizontal-stretch: 0;
+            }
+            Caption {
+                text: root.title;
+                color: Theme.fg;
+                horizontal-stretch: 1;
+            }
+            Caption {
+                text: root.trailing;
+                horizontal-alignment: right;
+                horizontal-stretch: 0;
+            }
+        }
+        @children
+    }
+}
+
+// Pill-shaped segmented control.
+export component Segmented inherits Rectangle {
+    in property <[string]> options;
+    in property <int> selected;
+    callback activated(int);
+    height: 34px;
+    border-radius: self.height / 2;
+    background: Theme.surface-2;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    HorizontalLayout {
+        padding: 3px;
+        spacing: 2px;
+        for opt[i] in root.options: Rectangle {
+            border-radius: self.height / 2;
+            background: i == root.selected ? Theme.fg : ta.has-hover ? Theme.surface-3 : transparent;
+            animate background { duration: Theme.fast; }
+            HorizontalLayout {
+                padding-left: 14px;
+                padding-right: 14px;
+                Text {
+                    text: opt;
+                    color: i == root.selected ? Theme.bg : Theme.fg-dim;
+                    font-family: Theme.mono-font;
+                    font-size: 11px;
+                    letter-spacing: 1.2px;
+                    vertical-alignment: center;
+                    horizontal-alignment: center;
+                    animate color { duration: Theme.fast; }
+                }
+            }
+            ta := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.activated(i); }
+            }
+        }
+    }
+}
+
+// Dot-styled on/off switch.
+export component Toggle inherits Rectangle {
+    in property <bool> checked;
+    callback toggled(bool);
+    width: 46px;
+    height: 26px;
+    border-radius: 13px;
+    background: checked ? Theme.accent.with-alpha(0.18) : Theme.surface-2;
+    border-width: 1px;
+    border-color: checked ? Theme.accent : Theme.border-strong;
+    animate background, border-color { duration: Theme.fast; }
+    knob := Rectangle {
+        width: 14px;
+        height: 14px;
+        border-radius: 7px;
+        y: (parent.height - self.height) / 2;
+        x: root.checked ? parent.width - self.width - 6px : 6px;
+        background: root.checked ? Theme.accent : Theme.fg-faint;
+        animate x, background { duration: Theme.normal; easing: ease-out; }
+    }
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.toggled(!root.checked); }
+    }
+}
+
+// Text button. `kind`: 0 ghost, 1 solid off-white, 2 danger.
+export component Button inherits Rectangle {
+    in property <string> text;
+    in property <int> kind: 0;
+    in property <bool> enabled: true;
+    callback clicked();
+    height: 40px;
+    min-width: 120px;
+    border-radius: self.height / 2;
+    opacity: enabled ? 1.0 : 0.35;
+    background: kind == 1 ? (ta.has-hover && enabled ? #ffffff : Theme.fg)
+        : kind == 2 ? (ta.has-hover && enabled ? Theme.danger.brighter(0.15) : Theme.danger)
+        : (ta.has-hover && enabled ? Theme.surface-3 : transparent);
+    border-width: kind == 0 ? 1px : 0px;
+    border-color: Theme.border-strong;
+    animate background { duration: Theme.fast; }
+    HorizontalLayout {
+        padding-left: 20px;
+        padding-right: 20px;
+        Text {
+            text: root.text;
+            color: root.kind == 1 ? Theme.bg : Theme.fg;
+            font-family: Theme.mono-font;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 1.4px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Tiny outlined tag ("SESSION", "SERVICE"…).
+export component Badge inherits Rectangle {
+    in property <string> text;
+    in property <color> tint: Theme.fg-dim;
+    height: 18px;
+    border-radius: 9px;
+    border-width: 1px;
+    border-color: tint.with-alpha(0.5);
+    HorizontalLayout {
+        padding-left: 7px;
+        padding-right: 7px;
+        Text {
+            text: root.text;
+            color: root.tint;
+            font-family: Theme.mono-font;
+            font-size: 9px;
+            letter-spacing: 1px;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// Decorative dot-grid background.
+export component DotGrid inherits Image {
+    source: @image-url("../assets/dot.svg");
+    horizontal-tiling: repeat;
+    vertical-tiling: repeat;
+    colorize: Theme.fg;
+    opacity: Theme.dot-grid ? 0.07 : 0;
+    animate opacity { duration: Theme.slow; }
+}
+
+// Key/value line used in detail panels.
+export component Stat inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> value;
+    in property <color> value-color: Theme.fg;
+    height: 26px;
+    spacing: 8px;
+    Caption {
+        text: root.label;
+        horizontal-stretch: 0;
+        min-width: 96px;
+    }
+    Text {
+        text: root.value;
+        color: root.value-color;
+        font-family: Theme.mono-font;
+        font-size: 13px;
+        horizontal-alignment: right;
+        vertical-alignment: center;
+        overflow: elide;
+        horizontal-stretch: 1;
+    }
+}

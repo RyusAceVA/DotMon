@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Dotmon
+GenericName=Gestionnaire des tâches
+Comment=Moniteur système et gestionnaire de tâches
+Keywords=task;process;monitor;system;cpu;memory;gpu;tâches;processus;moniteur;système;
+Exec=dotmon
+Icon=dotmon
+Terminal=false
+Categories=System;Monitor;
+StartupWMClass=dotmon

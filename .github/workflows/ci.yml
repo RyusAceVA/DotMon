@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # Les deux jobs tournent dans un conteneur Arch Linux : mêmes bibliothèques que la
+  # cible réelle (CachyOS / Arch) et mêmes versions de rust et de makepkg.
+  rust:
+    name: fmt · clippy · tests
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Dépendances
+        run: |
+          pacman -Syu --noconfirm --needed git
+          # (git est requis par checkout ; le reste vient du PKGBUILD)
+      - uses: actions/checkout@v4
+      - name: Dépendances déclarées dans le PKGBUILD
+        run: scripts/ci/install-deps.sh
+      - name: fmt, clippy, tests
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          scripts/ci/check.sh
+
+  paquet:
+    name: paquet Arch (makepkg · namcap)
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Dépendances
+        run: pacman -Syu --noconfirm --needed git
+      - uses: actions/checkout@v4
+      - name: Dépendances déclarées dans le PKGBUILD
+        run: scripts/ci/install-deps.sh
+      - name: Utilisateur de construction (makepkg refuse root)
+        run: |
+          useradd -m builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+      - name: Construction et contrôles
+        run: su builder -c "cd '$GITHUB_WORKSPACE' && scripts/ci/package.sh"

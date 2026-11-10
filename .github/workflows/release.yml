@@ -1,0 +1,64 @@
+name: Release
+
+# Déclenchée UNIQUEMENT par la poussée d'une étiquette vX.Y.Z ou vX.Y.Z-beta.N (les versions
+# avec « - » sont publiées comme pré-versions). Aucune publication sans cette action humaine.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: archives (Arch Linux)
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Dépendances
+        run: pacman -Syu --noconfirm --needed git
+      - uses: actions/checkout@v4
+      - name: Dépendances déclarées dans le PKGBUILD
+        run: scripts/ci/install-deps.sh
+      - name: Version = étiquette (Cargo, PKGBUILD, journal, notes)
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          scripts/ci/check-version.sh "$GITHUB_REF_NAME"
+      - name: Tests
+        run: scripts/ci/check.sh
+      - name: Archives binaire et source
+        run: scripts/ci/build-release.sh dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+
+  publier:
+    name: publier la release GitHub
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Créer la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=()
+          case "$GITHUB_REF_NAME" in *-*) flags+=(--prerelease);; esac
+          notes="docs/releases/$GITHUB_REF_NAME.md"
+          fence=$'\x60\x60\x60'
+          {
+            cat "$notes"
+            printf '\n## Sommes SHA-256\n\nCommit : %s\n\n%s\n' "$GITHUB_SHA" "$fence"
+            (cd dist && cat -- *.sha256)
+            printf '%s\n' "$fence"
+          } > release-notes.md
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" --title "Dotmon ${GITHUB_REF_NAME#v}" \
+            --notes-file release-notes.md --verify-tag "${flags[@]}"

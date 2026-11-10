@@ -1,0 +1,25 @@
+[workspace]
+resolver = "3"
+members = ["crates/dotmon-core", "crates/dotmon-sys", "crates/dotmon-app"]
+default-members = ["crates/dotmon-app"]
+
+[workspace.package]
+version = "0.4.0-beta.1"
+edition = "2024"
+rust-version = "1.92"
+publish = false
+license = "GPL-3.0-only"
+repository = "https://github.com/RyusAceVA/dotmon"
+
+[workspace.dependencies]
+dotmon-core = { path = "crates/dotmon-core" }
+dotmon-sys = { path = "crates/dotmon-sys" }
+serde = { version = "1", features = ["derive"] }
+toml = "1.2"
+dirs = "7"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+opt-level = 3

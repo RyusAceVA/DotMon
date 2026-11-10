@@ -1,0 +1,267 @@
+// Dotmon — main window.
+
+import { Theme, Sys, Api, ProcRow, Detail, Confirm, DiskRow } from "theme.slint";
+import { Caption, LiveDot, Button, DotGrid } from "components/widgets.slint";
+import { Dashboard } from "pages/dashboard.slint";
+import { Processes } from "pages/processes.slint";
+import { SettingsPage } from "pages/settings.slint";
+
+export { Theme, Sys, Api, ProcRow, Detail, Confirm, DiskRow }
+
+component NavTab inherits Rectangle {
+    in property <string> index;
+    in property <string> text;
+    in property <bool> active;
+    callback clicked();
+    height: 40px;
+    HorizontalLayout {
+        spacing: 8px;
+        padding-left: 4px;
+        padding-right: 4px;
+        Caption {
+            text: root.index;
+            color: root.active ? Theme.accent : Theme.fg-faint;
+        }
+        Caption {
+            text: root.text;
+            color: root.active ? Theme.fg : ta.has-hover ? Theme.fg-dim : Theme.fg-faint;
+            animate color { duration: Theme.fast; }
+        }
+    }
+    // Active marker: a single dot under the label.
+    Rectangle {
+        y: parent.height - 4px;
+        x: (parent.width - self.width) / 2;
+        width: root.active ? 4px : 0px;
+        height: 4px;
+        border-radius: 2px;
+        background: Theme.accent;
+        animate width { duration: Theme.normal; easing: ease-out; }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component Page inherits Rectangle {
+    in property <bool> shown;
+    opacity: shown ? 1 : 0;
+    visible: self.opacity > 0.01;
+    animate opacity { duration: Theme.normal; easing: ease-out; }
+}
+
+component ConfirmDialog inherits Rectangle {
+    background: #000000cc;
+    // Swallow clicks behind the dialog.
+    TouchArea { }
+
+    Rectangle {
+        width: min(480px, parent.width - 40px);
+        height: box.preferred-height;
+        background: Theme.surface;
+        border-radius: Theme.radius;
+        border-width: 1px;
+        border-color: Api.confirm.force ? Theme.danger.with-alpha(0.6) : Theme.border-strong;
+
+        box := VerticalLayout {
+            padding: 28px;
+            spacing: 14px;
+            Caption {
+                text: Api.confirm.force ? "CONFIRMATION · ARRÊT FORCÉ" : "CONFIRMATION";
+                color: Theme.accent;
+            }
+            Text {
+                text: Api.confirm.name;
+                font-family: Theme.dot-font;
+                font-weight: 800;
+                font-size: 40px;
+                color: Theme.fg;
+                overflow: elide;
+            }
+            Text {
+                text: Api.confirm.body;
+                color: Theme.fg-dim;
+                font-family: Theme.mono-font;
+                font-size: 13px;
+                wrap: word-wrap;
+            }
+            Rectangle { height: 6px; }
+            HorizontalLayout {
+                spacing: 10px;
+                Button {
+                    text: "ANNULER";
+                    kind: 0;
+                    horizontal-stretch: 1;
+                    clicked => { Api.cancel-end(); }
+                }
+                Button {
+                    text: Api.confirm.force ? "FORCER L'ARRÊT" : "FERMER";
+                    kind: Api.confirm.force ? 2 : 1;
+                    horizontal-stretch: 1;
+                    clicked => { Api.confirm-end(); }
+                }
+            }
+            Caption {
+                text: "ÉCHAP POUR ANNULER";
+                color: Theme.fg-faint;
+                horizontal-alignment: center;
+            }
+        }
+    }
+}
+
+export component MainWindow inherits Window {
+    title: "Dotmon";
+    icon: @image-url("assets/dot.svg");
+    preferred-width: 1380px;
+    preferred-height: 880px;
+    min-width: 520px;
+    min-height: 600px;
+    background: Theme.bg;
+    default-font-family: Theme.mono-font;
+    forward-focus: keys;
+
+    in-out property <int> page: 0;
+    // Breakpoints are updated from change handlers rather than bindings:
+    // a binding on `width` would feed back into the layout constraints.
+    property <bool> narrow: false;
+    changed width => { self.narrow = self.width < 900px; }
+
+    keys := FocusScope {
+        key-pressed(e) => {
+            if (e.text == Key.Escape) {
+                if (Api.confirm.open) {
+                    Api.cancel-end();
+                    return accept;
+                }
+                if (Api.detail.present) {
+                    Api.close-detail();
+                    return accept;
+                }
+            }
+            if (e.modifiers.control) {
+                if (e.text == "1") { root.page = 0; return accept; }
+                if (e.text == "2") { root.page = 1; return accept; }
+                if (e.text == "3") { root.page = 2; return accept; }
+                if (e.text == "f") {
+                    root.page = 1;
+                    processes.focus-search();
+                    return accept;
+                }
+            }
+            reject
+        }
+
+        DotGrid {
+            width: 100%;
+            height: 100%;
+        }
+
+        VerticalLayout {
+            padding: 22px;
+            padding-top: 16px;
+            spacing: 16px;
+
+            // ---- Header ----------------------------------------------------
+            HorizontalLayout {
+                height: 48px;
+                spacing: 28px;
+                HorizontalLayout {
+                    spacing: 12px;
+                    alignment: start;
+                    Text {
+                        text: "DOTMON";
+                        font-family: Theme.dot-font;
+                        font-weight: 900;
+                        font-size: 30px;
+                        color: Theme.fg;
+                        vertical-alignment: center;
+                        letter-spacing: 2px;
+                    }
+                    LiveDot {
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 22px;
+                    NavTab { index: "01"; text: "SYSTÈME"; active: root.page == 0; clicked => { root.page = 0; } }
+                    NavTab { index: "02"; text: "PROCESSUS"; active: root.page == 1; clicked => { root.page = 1; } }
+                    NavTab { index: "03"; text: "RÉGLAGES"; active: root.page == 2; clicked => { root.page = 2; } }
+                }
+                Rectangle { horizontal-stretch: 1; }
+                if !root.narrow: VerticalLayout {
+                    alignment: center;
+                    spacing: 2px;
+                    Caption { text: Sys.hostname + "  ·  " + Sys.kernel; horizontal-alignment: right; }
+                    Caption { text: "EN LIGNE  " + Sys.uptime; horizontal-alignment: right; color: Theme.fg; }
+                }
+            }
+
+            // ---- Pages -----------------------------------------------------
+            Rectangle {
+                vertical-stretch: 1;
+                Page {
+                    shown: root.page == 0;
+                    Dashboard { }
+                }
+                Page {
+                    shown: root.page == 1;
+                    processes := Processes { }
+                }
+                Page {
+                    shown: root.page == 2;
+                    SettingsPage { }
+                }
+            }
+
+            // ---- Footer ----------------------------------------------------
+            HorizontalLayout {
+                height: 16px;
+                spacing: 24px;
+                Caption { text: "PROCESSUS " + Sys.proc-count; color: Theme.fg-faint; }
+                if !root.narrow: Caption { text: "APPS " + Sys.app-count; color: Theme.fg-faint; }
+                if !root.narrow: Caption { text: "THREADS " + Sys.thread-count; color: Theme.fg-faint; }
+                Rectangle { horizontal-stretch: 1; }
+                if !root.narrow: Caption { text: "ÉCHANTILLON " + Sys.interval; color: Theme.fg-faint; }
+                Caption { text: "SOURCE " + Sys.backend; color: Sys.backend == "SIMULATION" ? Theme.accent : Theme.fg-faint; }
+            }
+        }
+
+        // ---- Toast ---------------------------------------------------------
+        if Api.toast != "": Rectangle {
+            y: parent.height - 92px;
+            x: (parent.width - self.width) / 2;
+            height: 44px;
+            width: toast-row.preferred-width;
+            border-radius: 22px;
+            background: Theme.surface-2;
+            border-width: 1px;
+            border-color: Api.toast-error ? Theme.danger : Theme.border-strong;
+            toast-row := HorizontalLayout {
+                padding-left: 18px;
+                padding-right: 20px;
+                spacing: 10px;
+                Rectangle {
+                    width: 6px;
+                    height: 6px;
+                    y: (parent.height - self.height) / 2;
+                    border-radius: 3px;
+                    background: Api.toast-error ? Theme.danger : Theme.fg;
+                }
+                Text {
+                    text: Api.toast;
+                    color: Theme.fg;
+                    font-family: Theme.mono-font;
+                    font-size: 12px;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        if Api.confirm.open: ConfirmDialog {
+            width: 100%;
+            height: 100%;
+        }
+    }
+}

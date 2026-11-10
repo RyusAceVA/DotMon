@@ -1,0 +1,219 @@
+// Design tokens and the globals shared with Rust.
+//
+// Rust writes into `Sys` (dashboard data) and `Api` (list, detail, dialogs,
+// settings) and listens to the callbacks declared on `Api`. Components never
+// talk to the system directly.
+
+import "fonts/Doto.ttf";
+import "fonts/SpaceMono-Regular.ttf";
+import "fonts/SpaceMono-Bold.ttf";
+
+export global Theme {
+    // Accent selected in the settings (0 red, 1 amber, 2 green, 3 white).
+    in-out property <int> accent-index: 0;
+    in-out property <bool> animations: true;
+    in-out property <bool> dot-grid: true;
+
+    out property <color> bg: #000000;
+    out property <color> surface: #0a0a0a;
+    out property <color> surface-2: #121212;
+    out property <color> surface-3: #1a1a1a;
+    out property <color> border: #1d1d1d;
+    out property <color> border-strong: #2c2c2c;
+    // Off-white and anthracite scale.
+    out property <color> fg: #ece9e2;
+    out property <color> fg-dim: #8f8d88;
+    out property <color> fg-faint: #55534f;
+    out property <color> dot-off: #1e1e1e;
+    out property <color> dot-mid: #3a3a3a;
+
+    out property <color> accent:
+        accent-index == 1 ? #f0a030 :
+        accent-index == 2 ? #4fd17f :
+        accent-index == 3 ? #ece9e2 :
+        #e8352b;
+    out property <color> danger: #e8352b;
+
+    out property <string> dot-font: "Doto";
+    out property <string> mono-font: "Space Mono";
+
+    out property <length> radius: 18px;
+    out property <length> radius-s: 10px;
+    out property <length> pad: 20px;
+    out property <length> gap: 14px;
+
+    // Durations collapse to 0 when animations are disabled.
+    out property <duration> fast: animations ? 140ms : 0ms;
+    out property <duration> normal: animations ? 260ms : 0ms;
+    out property <duration> slow: animations ? 520ms : 0ms;
+}
+
+export struct DiskRow {
+    mount: string,
+    detail: string,
+    used: string,
+    frac: float,
+    read: string,
+    write: string,
+}
+
+export struct ProcRow {
+    id: string,
+    name: string,
+    pid: string,
+    user: string,
+    kind: string,
+    cpu: string,
+    cpu-frac: float,
+    mem: string,
+    threads: string,
+    io: string,
+    count: int,
+    protected: bool,
+}
+
+export struct Detail {
+    present: bool,
+    name: string,
+    kind: string,
+    pid: string,
+    user: string,
+    state: string,
+    cmdline: string,
+    cpu: string,
+    mem: string,
+    mem-unit: string,
+    threads: string,
+    io: string,
+    count: string,
+    started: string,
+    protected: bool,
+    reason: string,
+    cpu-line: string,
+    cpu-area: string,
+    cpu-max: string,
+    mem-line: string,
+    mem-area: string,
+    mem-max: string,
+}
+
+export struct Confirm {
+    open: bool,
+    force: bool,
+    name: string,
+    body: string,
+    count: int,
+}
+
+// Live system data for the dashboard.
+export global Sys {
+    in property <string> hostname: "—";
+    in property <string> kernel: "—";
+    in property <string> uptime: "00:00:00";
+    in property <string> backend: "—";
+    in property <string> interval: "1.0 s";
+    in property <int> tick;
+    in property <float> view-w: 119;
+
+    in property <string> proc-count: "0";
+    in property <string> app-count: "0";
+    in property <string> thread-count: "0";
+
+    in property <string> cpu: "0";
+    in property <string> cpu-model;
+    in property <string> cpu-freq;
+    in property <string> cpu-temp;
+    in property <string> cpu-load;
+    in property <float> cpu-frac;
+    in property <string> cpu-line;
+    in property <string> cpu-area;
+    in property <[float]> cpu-cols;
+    in property <[float]> cores;
+
+    in property <string> mem: "0";
+    in property <string> mem-unit: "Go";
+    in property <string> mem-total;
+    in property <string> mem-avail;
+    in property <string> mem-cached;
+    in property <float> mem-frac;
+    in property <string> swap;
+    in property <float> swap-frac;
+    in property <string> mem-line;
+    in property <string> mem-area;
+    in property <[float]> mem-cols;
+
+    in property <bool> gpu-present;
+    in property <string> gpu: "0";
+    in property <string> gpu-unit: "%";
+    in property <string> gpu-name;
+    in property <float> gpu-frac;
+    in property <string> vram;
+    in property <float> vram-frac;
+    in property <string> gpu-temp;
+    in property <string> gpu-power;
+    in property <string> gpu-line;
+    in property <string> gpu-area;
+    in property <[float]> gpu-cols;
+
+    in property <string> net-iface;
+    in property <string> net-rx;
+    in property <string> net-tx;
+    in property <string> net-rx-total;
+    in property <string> net-tx-total;
+    in property <string> net-rx-line;
+    in property <string> net-tx-line;
+    in property <string> net-max;
+
+    in property <string> disk-read;
+    in property <string> disk-write;
+    in property <string> disk-read-line;
+    in property <string> disk-write-line;
+    in property <string> disk-max;
+    in property <[DiskRow]> disks;
+}
+
+// Process list, detail, dialogs, settings.
+export global Api {
+    in property <[ProcRow]> rows;
+    in property <string> selected-id;
+    in property <Detail> detail;
+    in property <Confirm> confirm;
+    in property <string> toast;
+    in property <bool> toast-error;
+    in property <int> toast-seq;
+
+    // List state mirrored from Rust.
+    in property <int> mode;        // 0 apps, 1 processes
+    in property <int> filter;      // 0 all, 1 apps, 2 services, 3 system
+    in property <int> sort-key;    // 0 name, 1 pid, 2 cpu, 3 mem, 4 threads, 5 io
+    in property <bool> sort-desc: true;
+    in property <string> result-count;
+    // False with the real backend until ending processes is validated.
+    in property <bool> actions-enabled: true;
+
+    // Settings mirrored from Rust.
+    in property <int> refresh-index: 1;
+    in property <int> history-index: 1;
+    in property <int> chart-style;  // 0 line, 1 dots
+    in property <bool> show-kernel;
+    in property <string> config-path;
+
+    callback search-changed(string);
+    callback mode-changed(int);
+    callback filter-changed(int);
+    callback sort-clicked(int);
+    callback row-clicked(int);
+    callback close-detail();
+
+    callback request-end(bool /* force */);
+    callback confirm-end();
+    callback cancel-end();
+
+    callback set-refresh(int);
+    callback set-history(int);
+    callback set-accent(int);
+    callback set-chart-style(int);
+    callback set-animations(bool);
+    callback set-dot-grid(bool);
+    callback set-show-kernel(bool);
+}

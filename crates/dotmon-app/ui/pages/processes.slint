@@ -1,0 +1,492 @@
+// 02 — Applications & processes: search, filter, sort, detail, end.
+//
+// Responsive: below 1100px the THREADS / E/S columns are hidden, the
+// toolbar wraps on two lines and the detail panel slides over the list.
+
+import { ListView } from "std-widgets.slint";
+import { Theme, Api, ProcRow } from "../theme.slint";
+import { Card, Caption, BigValue, DotMeter, LineChart, Segmented, Button, Badge, Stat } from "../components/widgets.slint";
+
+component SearchBox inherits Rectangle {
+    in-out property <string> text <=> input.text;
+    callback edited(string);
+    height: 40px;
+    border-radius: self.height / 2;
+    background: Theme.surface;
+    border-width: 1px;
+    border-color: input.has-focus ? Theme.fg-faint : Theme.border;
+    animate border-color { duration: Theme.fast; }
+    forward-focus: input;
+
+    public function focus-search() {
+        input.focus();
+        input.select-all();
+    }
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 10px;
+        // Dot-matrix magnifier: a ring of dots.
+        Rectangle {
+            width: 14px;
+            for k in 8: Rectangle {
+                width: 2px;
+                height: 2px;
+                border-radius: 1px;
+                background: Theme.fg-dim;
+                x: 6px + 5px * cos(k * 45deg);
+                y: parent.height / 2 - 1px + 5px * sin(k * 45deg);
+            }
+        }
+        Rectangle {
+            horizontal-stretch: 1;
+            min-width: 60px;
+            input := TextInput {
+                width: 100%;
+                color: Theme.fg;
+                font-family: Theme.mono-font;
+                font-size: 13px;
+                vertical-alignment: center;
+                single-line: true;
+                selection-background-color: Theme.accent.with-alpha(0.4);
+                edited => { root.edited(self.text); }
+                key-pressed(e) => {
+                    if (e.text == Key.Escape && self.text != "") {
+                        self.text = "";
+                        root.edited("");
+                        return accept;
+                    }
+                    reject
+                }
+            }
+            if input.text == "": Text {
+                text: "Rechercher : nom, commande, utilisateur, pid:1234";
+                color: Theme.fg-faint;
+                font-family: Theme.mono-font;
+                font-size: 13px;
+                vertical-alignment: center;
+                width: 100%;
+                overflow: elide;
+            }
+        }
+        Caption {
+            text: Api.result-count;
+            color: Theme.fg-faint;
+            horizontal-stretch: 0;
+        }
+    }
+}
+
+component SortHeader inherits Rectangle {
+    in property <string> text;
+    in property <int> key;
+    in property <bool> right: true;
+    property <bool> active: Api.sort-key == key;
+    HorizontalLayout {
+        alignment: root.right ? end : start;
+        spacing: 4px;
+        Caption {
+            text: root.text;
+            color: root.active ? Theme.fg : ta.has-hover ? Theme.fg-dim : Theme.fg-faint;
+        }
+        Caption {
+            text: root.active ? (Api.sort-desc ? "↓" : "↑") : "";
+            color: Theme.accent;
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { Api.sort-clicked(root.key); }
+    }
+}
+
+// Shared column widths (header and rows must agree).
+global Cols {
+    out property <length> pid: 72px;
+    out property <length> cpu: 120px;
+    out property <length> mem: 96px;
+    out property <length> thr: 70px;
+    out property <length> io: 96px;
+    out property <length> pad: 14px;
+    out property <length> spacing: 8px;
+}
+
+component Cell inherits Text {
+    color: Theme.fg;
+    font-family: Theme.mono-font;
+    font-size: 13px;
+    horizontal-alignment: right;
+    vertical-alignment: center;
+}
+
+component ProcItem inherits Rectangle {
+    in property <ProcRow> item;
+    in property <int> index;
+    in property <bool> compact;
+    property <bool> selected: Api.selected-id == item.id;
+    height: 44px;
+    border-radius: Theme.radius-s;
+    background: selected ? Theme.surface-3 : ta.has-hover ? Theme.surface-2 : transparent;
+    animate background { duration: Theme.fast; }
+
+    if root.selected: Rectangle {
+        x: 0;
+        width: 3px;
+        height: 18px;
+        y: (parent.height - self.height) / 2;
+        border-radius: 1.5px;
+        background: Theme.accent;
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { Api.row-clicked(root.index); }
+    }
+
+    HorizontalLayout {
+        padding-left: Cols.pad;
+        padding-right: Cols.pad;
+        spacing: Cols.spacing;
+        // Name cell: its content must never widen the column, otherwise
+        // rows with badges would be misaligned with the header.
+        Rectangle {
+            horizontal-stretch: 1;
+            min-width: 0px;
+            HorizontalLayout {
+                width: parent.width;
+                spacing: 8px;
+                Text {
+                    text: root.item.name;
+                    color: root.item.protected ? Theme.fg-dim : Theme.fg;
+                    font-family: Theme.mono-font;
+                    font-size: 13px;
+                    vertical-alignment: center;
+                    overflow: elide;
+                    min-width: min(40px, self.preferred-width);
+                    horizontal-stretch: 0;
+                }
+                if root.item.count > 1: Caption {
+                    text: "×" + root.item.count;
+                    color: Theme.fg-faint;
+                    horizontal-stretch: 0;
+                }
+                if root.item.kind != "APP" && !root.compact: VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 0;
+                    Badge {
+                        text: root.item.kind;
+                        tint: root.item.kind == "SERVICE" ? Theme.fg-dim : Theme.fg-faint;
+                    }
+                }
+                Rectangle { horizontal-stretch: 1; }
+            }
+        }
+        Cell {
+            width: Cols.pid;
+            text: root.item.pid;
+            color: Theme.fg-faint;
+            font-size: 12px;
+        }
+        HorizontalLayout {
+            width: Cols.cpu;
+            spacing: 8px;
+            alignment: end;
+            DotMeter {
+                width: 46px;
+                height: 4px;
+                y: (parent.height - self.height) / 2;
+                count: 8;
+                value: root.item.cpu-frac;
+                peak-threshold: 0.5;
+            }
+            Cell {
+                width: 54px;
+                text: root.item.cpu;
+                color: root.item.cpu-frac >= 0.5 ? Theme.accent : Theme.fg;
+            }
+        }
+        Cell {
+            width: Cols.mem;
+            text: root.item.mem;
+        }
+        if !root.compact: Cell {
+            width: Cols.thr;
+            text: root.item.threads;
+            color: Theme.fg-dim;
+            font-size: 12px;
+        }
+        if !root.compact: Cell {
+            width: Cols.io;
+            text: root.item.io;
+            color: Theme.fg-dim;
+            font-size: 12px;
+        }
+    }
+}
+
+component DetailPanel inherits Card {
+    index: "◆";
+    title: "DÉTAIL";
+    trailing: Api.detail.kind;
+
+    HorizontalLayout {
+        spacing: 8px;
+        Text {
+            text: Api.detail.name;
+            font-family: Theme.dot-font;
+            font-weight: 800;
+            font-size: 34px;
+            color: Theme.fg;
+            overflow: elide;
+            horizontal-stretch: 1;
+        }
+        Rectangle {
+            width: 30px;
+            height: 30px;
+            border-radius: 15px;
+            background: close-ta.has-hover ? Theme.surface-3 : transparent;
+            Text {
+                text: "×";
+                color: Theme.fg-dim;
+                font-size: 18px;
+            }
+            close-ta := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { Api.close-detail(); }
+            }
+        }
+    }
+    Caption {
+        text: "PID " + Api.detail.pid + "  ·  " + Api.detail.user + "  ·  " + Api.detail.state;
+        overflow: elide;
+    }
+
+    // CPU
+    HorizontalLayout {
+        spacing: 10px;
+        BigValue {
+            value: Api.detail.cpu;
+            unit: "% CPU";
+            size: 38px;
+        }
+        Rectangle { horizontal-stretch: 1; }
+        Caption {
+            text: "ÉCHELLE " + Api.detail.cpu-max;
+            color: Theme.fg-faint;
+            vertical-alignment: bottom;
+        }
+    }
+    LineChart {
+        height: 50px;
+        line: Api.detail.cpu-line;
+        area: Api.detail.cpu-area;
+        tint: Theme.accent;
+    }
+
+    // Memory
+    HorizontalLayout {
+        spacing: 10px;
+        BigValue {
+            value: Api.detail.mem;
+            unit: Api.detail.mem-unit;
+            size: 38px;
+        }
+        Rectangle { horizontal-stretch: 1; }
+        Caption {
+            text: "ÉCHELLE " + Api.detail.mem-max;
+            color: Theme.fg-faint;
+            vertical-alignment: bottom;
+        }
+    }
+    LineChart {
+        height: 50px;
+        line: Api.detail.mem-line;
+        area: Api.detail.mem-area;
+    }
+
+    VerticalLayout {
+        Stat { label: "PROCESSUS"; value: Api.detail.count; }
+        Stat { label: "THREADS"; value: Api.detail.threads; }
+        Stat { label: "E/S DISQUE"; value: Api.detail.io; }
+        Stat { label: "DÉMARRÉ"; value: Api.detail.started; }
+    }
+    Text {
+        text: Api.detail.cmdline;
+        color: Theme.fg-faint;
+        font-family: Theme.mono-font;
+        font-size: 11px;
+        wrap: word-wrap;
+        overflow: elide;
+        // Two lines at most: long command lines must not push the buttons out.
+        height: 30px;
+    }
+
+    Rectangle { vertical-stretch: 1; }
+
+    if Api.detail.protected: Rectangle {
+        border-radius: Theme.radius-s;
+        background: Theme.surface-2;
+        HorizontalLayout {
+            padding: 12px;
+            spacing: 10px;
+            Rectangle {
+                width: 3px;
+                border-radius: 1.5px;
+                background: Theme.accent;
+            }
+            VerticalLayout {
+                spacing: 4px;
+                Caption { text: "PROTÉGÉ"; color: Theme.accent; }
+                Text {
+                    text: Api.detail.reason;
+                    color: Theme.fg-dim;
+                    font-family: Theme.mono-font;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+            }
+        }
+    }
+    if !Api.actions-enabled && !Api.detail.protected: Caption {
+        text: "FERMETURE DÉSACTIVÉE · DONNÉES RÉELLES";
+        color: Theme.fg-faint;
+        horizontal-alignment: center;
+    }
+    HorizontalLayout {
+        spacing: 10px;
+        Button {
+            text: "FERMER";
+            kind: 0;
+            min-width: 100px;
+            enabled: !Api.detail.protected && Api.actions-enabled;
+            horizontal-stretch: 1;
+            clicked => { Api.request-end(false); }
+        }
+        Button {
+            text: "FORCER";
+            kind: 2;
+            min-width: 100px;
+            enabled: !Api.detail.protected && Api.actions-enabled;
+            horizontal-stretch: 1;
+            clicked => { Api.request-end(true); }
+        }
+    }
+}
+
+component Toolbar inherits Rectangle {
+    in property <bool> compact;
+    callback search-edited(string);
+    public function focus-search() {
+        search.focus-search();
+    }
+    height: layout.preferred-height;
+    layout := VerticalLayout {
+        spacing: 10px;
+        HorizontalLayout {
+            spacing: Theme.gap;
+            search := SearchBox {
+                horizontal-stretch: 1;
+                edited(t) => { root.search-edited(t); }
+            }
+            if !root.compact: Segmented {
+                y: (parent.height - self.height) / 2;
+                options: ["APPLICATIONS", "PROCESSUS"];
+                selected: Api.mode;
+                activated(i) => { Api.mode-changed(i); }
+            }
+            if !root.compact: Segmented {
+                y: (parent.height - self.height) / 2;
+                options: ["TOUT", "APPS", "SERVICES", "SYSTÈME"];
+                selected: Api.filter;
+                activated(i) => { Api.filter-changed(i); }
+            }
+        }
+        if root.compact: HorizontalLayout {
+            spacing: 10px;
+            Segmented {
+                options: ["APPS", "PROC."];
+                selected: Api.mode;
+                activated(i) => { Api.mode-changed(i); }
+            }
+            Rectangle { horizontal-stretch: 1; }
+            Segmented {
+                options: ["TOUT", "APPS", "SERV.", "SYS."];
+                selected: Api.filter;
+                activated(i) => { Api.filter-changed(i); }
+            }
+        }
+    }
+}
+
+export component Processes inherits Rectangle {
+    property <bool> compact: false;
+    changed width => { self.compact = self.width < 1100px; }
+
+    public function focus-search() {
+        toolbar.focus-search();
+    }
+
+    VerticalLayout {
+        spacing: Theme.gap;
+        toolbar := Toolbar {
+            compact: root.compact;
+            search-edited(t) => { Api.search-changed(t); }
+        }
+        HorizontalLayout {
+            spacing: Theme.gap;
+            vertical-stretch: 1;
+            Card {
+                header: false;
+                horizontal-stretch: 1;
+                HorizontalLayout {
+                    padding-left: Cols.pad;
+                    padding-right: Cols.pad + 12px; // room for the scrollbar
+                    spacing: Cols.spacing;
+                    height: 20px;
+                    SortHeader { text: "NOM"; key: 0; right: false; horizontal-stretch: 1; min-width: 0px; }
+                    SortHeader { text: "PID"; key: 1; width: Cols.pid; }
+                    SortHeader { text: "CPU"; key: 2; width: Cols.cpu; }
+                    SortHeader { text: "MÉMOIRE"; key: 3; width: Cols.mem; }
+                    if !root.compact: SortHeader { text: "THREADS"; key: 4; width: Cols.thr; }
+                    if !root.compact: SortHeader { text: "E/S"; key: 5; width: Cols.io; }
+                }
+                Rectangle {
+                    height: 1px;
+                    background: Theme.border;
+                }
+                ListView {
+                    vertical-stretch: 1;
+                    for row[i] in Api.rows: ProcItem {
+                        item: row;
+                        index: i;
+                        compact: root.compact;
+                    }
+                }
+                if Api.rows.length == 0: Caption {
+                    text: "AUCUN RÉSULTAT";
+                    horizontal-alignment: center;
+                    color: Theme.fg-faint;
+                }
+            }
+            if Api.detail.present && !root.compact: DetailPanel {
+                width: 380px;
+            }
+        }
+    }
+
+    // Narrow windows: the detail slides over the list.
+    if Api.detail.present && root.compact: Rectangle {
+        background: #000000a0;
+        TouchArea {
+            clicked => { Api.close-detail(); }
+        }
+        DetailPanel {
+            width: min(400px, parent.width);
+            x: parent.width - self.width;
+            height: parent.height;
+            drop-shadow-blur: 24px;
+            drop-shadow-color: #000000;
+        }
+    }
+}

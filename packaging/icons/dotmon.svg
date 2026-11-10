@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Dotmon icon: system activity drawn as a dot-matrix bar graph, red peak. Original artwork. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" rx="56" fill="#0b0b0b"/>
+  <rect x="3" y="3" width="250" height="250" rx="53" fill="none" stroke="#262626" stroke-width="3"/>
+  <g fill="#262626">
+    <circle cx="48" cy="48" r="14"/>
+    <circle cx="48" cy="88" r="14"/>
+    <circle cx="48" cy="128" r="14"/>
+    <circle cx="88" cy="48" r="14"/>
+    <circle cx="128" cy="48" r="14"/>
+    <circle cx="128" cy="88" r="14"/>
+    <circle cx="208" cy="48" r="14"/>
+    <circle cx="208" cy="88" r="14"/>
+  </g>
+  <g fill="#ece8e1">
+    <circle cx="48" cy="168" r="14"/>
+    <circle cx="48" cy="208" r="14"/>
+    <circle cx="88" cy="88" r="14"/>
+    <circle cx="88" cy="128" r="14"/>
+    <circle cx="88" cy="168" r="14"/>
+    <circle cx="88" cy="208" r="14"/>
+    <circle cx="128" cy="128" r="14"/>
+    <circle cx="128" cy="168" r="14"/>
+    <circle cx="128" cy="208" r="14"/>
+    <circle cx="168" cy="88" r="14"/>
+    <circle cx="168" cy="128" r="14"/>
+    <circle cx="168" cy="168" r="14"/>
+    <circle cx="168" cy="208" r="14"/>
+    <circle cx="208" cy="128" r="14"/>
+    <circle cx="208" cy="168" r="14"/>
+    <circle cx="208" cy="208" r="14"/>
+  </g>
+  <g fill="#e8372c">
+    <circle cx="168" cy="48" r="14"/>
+  </g>
+</svg>

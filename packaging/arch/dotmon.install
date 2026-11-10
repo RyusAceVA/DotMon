@@ -1,0 +1,13 @@
+post_install() {
+    cat <<'MSG'
+:: Dotmon est installé : lancez-le depuis le lanceur d'applications ou avec « dotmon ».
+:: Si l'icône n'apparaît pas dans Quickshell/ii (un Quickshell déjà lancé garde en
+:: mémoire la liste des icônes), en tant qu'utilisateur normal, dans votre session :
+::     dbus-send --session --type=signal /KIconLoader org.kde.KIconLoader.iconChanged int32:0
+:: (ou redémarrez Quickshell / rouvrez la session). Voir /usr/share/doc/dotmon/PACKAGING.md.
+MSG
+}
+
+post_upgrade() {
+    post_install
+}
